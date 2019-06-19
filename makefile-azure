@@ -1,52 +1,13 @@
-# Compiler check
-ifeq ($(CROSS_COMPILE),)
-$(warning CROSS_COMPILE is not set!)
-endif
 
-CC := $(CROSS_COMPILE)gcc
-RM := rm -f
-MKDIR := mkdir -p
+OBJS = datalogger.o jWrite.o
+TARGET = azure-cloudlogger
 
-CFLAGS := -O0 -Wall -g
+all:    $(TARGET)
 
-SQLITE3_PATH = /home/user/b37786/dn-auto-ask/src-openwrt-ls1043a_7.0.1.B1-DCM/build_dir/target-aarch64_armv8-a_glibc-2.19/root-ls1043a/usr/lib
-AZURE_IOT_DIR = ../../../../azure-iot-sdk-c-aarch64-compiled
-ROOT_DIR = ./
-BUILD_DIR = $(ROOT_DIR)/build
-OBJ_DIR = $(BUILD_DIR)/obj
-ELF = $(BUILD_DIR)/azure-cloudlogger
-INCLUDES += -I $(AZURE_IOT_DIR)/iothub_client/inc
-INCLUDES += -I $(AZURE_IOT_DIR)/c-utility/inc
-INCLUDES += -I /home/user/b37786/dn-auto-ask/src-openwrt-ls1043a_7.0.1.B1-DCM/build_dir/target-aarch64_armv8-a_glibc-2.19/sqlite-autoconf-3081101
+$(TARGET): $(OBJS)
+	$(CC) $(CFLAGS) -o $(TARGET) $(OBJS) $(LDFLAGS)
 
-MBEDTLS_DIR = $(AZURE_IOT_DIR)/external_libs/mbedTLS
-LIBS += -Wl,-rpath
-LIBS +=  $(AZURE_IOT_DIR)/cmake/c-utility/libaziotsharedutil.a $(AZURE_IOT_DIR)/cmake/iothub_client/libiothub_client.a $(AZURE_IOT_DIR)/cmake/iothub_client/libiothub_client_mqtt_transport.a  -lpthread -L$(SQLITE3_PATH) -lsqlite3
+%.o: %.c
+	$(CC) $(CFLAGS) -o $@ -c $<
 
-# create object file list
-OBJS = \
-	$(OBJ_DIR)/datalogger.o \
-	$(OBJ_DIR)/jWrite.o
-
-$(OBJ_DIR)/%.o: src/%.c
-	@echo 'Building app file: $<'
-	$(CC) $(INCLUDES) $(CFLAGS) -c -o $@ $<
-	@echo 'Finished building: $<'
-	@echo ' '
-
-# All Target
-all: $(ELF)
-
-# Executable target
-$(ELF): $(OBJS)
-	@echo 'Building target: $@'
-	$(CC) -o $(ELF) $(OBJS) $(LIBS)
-	@echo 'Finished building target: $@'
-	@echo ' '
-
-# Other Targets
 clean:
-	-$(RM) $(OBJS) $(ELF)
-	-@echo ' '
-
-.PHONY: all clean

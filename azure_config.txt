@@ -1,0 +1,1 @@
+"HostName=AutoIoT.azure-devices.net;DeviceId=MyIoTDevice;SharedAccessKey=4ltUWFYHN7oJtpmygztCBe6qF7ZWjBqwqIk6ybMXsf4="

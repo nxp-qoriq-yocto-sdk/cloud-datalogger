@@ -22,8 +22,7 @@
 #include "aws_iot_log.h"
 #include "aws_iot_version.h"
 #include "aws_iot_mqtt_client_interface.h"
-#endif
-#ifdef AZURE_CLOUD
+#elif AZURE_CLOUD
 #include "iothub.h"
 #include "iothub_device_client_ll.h"
 #include "iothub_client_options.h"
@@ -174,8 +173,12 @@ int32_t callback(void *NotUsed, int32_t argc, char **argv, char **azColName)
  *     aws iot c-sdk
  ***********************************************************************************/
 char certDirectory[PATH_MAX + 1] = "aws_iot-c-sdk/certs";
-char HostAddress[255] = AWS_IOT_MQTT_HOST;
+//char HostAddress[255] = AWS_IOT_MQTT_HOST;
+//static const char* HostAddress = "a79d6ahohvaw.iot.us-east-1.amazonaws.com";
+static const char *clientId = "c-sdk-client-id";
 uint32_t port = AWS_IOT_MQTT_PORT;
+char *HostAddress = NULL;
+const char* aws_conf_file_name = "/home/root/aws_config.txt";
 AWS_IoT_Client client;
 
 void disconnectCallbackHandler(AWS_IoT_Client *pClient, void *data) 
@@ -202,6 +205,38 @@ void disconnectCallbackHandler(AWS_IoT_Client *pClient, void *data)
         }
 }
 
+int read_aws_hostname()
+{
+   FILE *fp;
+   char str[256];
+
+   HostAddress = malloc(256);
+   if(HostAddress == NULL)
+   {
+      printf("\n %s: memory alloc failed\n",__FUNCTION__);
+      return FAILURE;
+   }
+
+   fp = fopen(aws_conf_file_name, "r");
+    if (fp == NULL){
+        printf("Could not open file %s",aws_conf_file_name);
+        return FAILURE;
+    }
+
+
+    while (fgets(str, 256, fp) != NULL)
+    {
+      strcpy(HostAddress,str);
+      HostAddress = strtok(HostAddress, "\"");
+      printf(" AWS hostname : %s", HostAddress);
+      fclose(fp);
+      return 0;
+    }
+
+    fclose(fp);
+    return FAILURE;
+}
+
 int32_t aws_iot_sdk_init()
 {
         char rootCA[PATH_MAX + 1];
@@ -210,6 +245,12 @@ int32_t aws_iot_sdk_init()
         char CurrentWD[PATH_MAX + 1];
 
         IoT_Error_t rc = FAILURE;
+
+	if(read_aws_hostname() != 0)
+	{
+ 	   printf("\n %s: ERROR: getting AWS host name fialed \n",__FUNCTION__);
+	   return FAILURE;
+	}
 
         printf("\n AWS iOT init Start \n");
         IoT_Client_Init_Params mqttInitParams = iotClientInitParamsDefault;
@@ -247,8 +288,8 @@ int32_t aws_iot_sdk_init()
         connectParams.keepAliveIntervalInSec = 600;
         connectParams.isCleanSession = true;
         connectParams.MQTTVersion = MQTT_3_1_1;
-        connectParams.pClientID = AWS_IOT_MQTT_CLIENT_ID;
-        connectParams.clientIDLen = (uint16_t) strlen(AWS_IOT_MQTT_CLIENT_ID);
+        connectParams.pClientID = clientId;
+        connectParams.clientIDLen = (uint16_t) strlen(clientId);
         connectParams.isWillMsgPresent = false;
 
         printf(" Connecting...");
@@ -308,14 +349,14 @@ int32_t iot_sdk_publish(char *buffer)
 
         return 0;
 }
-#endif
-
-#ifdef AZURE_CLOUD
+#elif AZURE_CLOUD
 /************************************************************************************
  *     azure iot c-sdk
  ***********************************************************************************/
 /* Paste in the your iothub connection string  */
-static const char* connectionString = "HostName=auto-iot.azure-devices.net;DeviceId=auto-device;SharedAccessKey=bVpdmEQs083yVjSNpHo0MgG0d2Q3kFH/f9n4+oRZbe0=";
+//static const char* connectionString = "HostName=auto-iot.azure-devices.net;DeviceId=auto-device;SharedAccessKey=bVpdmEQs083yVjSNpHo0MgG0d2Q3kFH/f9n4+oRZbe0=";
+char *connectionString = NULL;
+const char* azure_conf_file_name = "/home/root/azure_config.txt";
 #define MESSAGE_COUNT        5
 static bool g_continueRunning = true;
 static size_t g_message_count_send_confirmations = 0;
@@ -344,6 +385,38 @@ static void connection_status_callback(IOTHUB_CLIENT_CONNECTION_STATUS result, I
     }
 }
 
+int read_azure_connection_string()
+{
+   FILE *fp;
+   char str[256];
+
+   connectionString = malloc(256);
+   if(connectionString == NULL)
+   {
+      printf("\n %s: memory alloc failed\n",__FUNCTION__);
+      return FAILURE;
+   }
+
+   fp = fopen(azure_conf_file_name, "r");
+    if (fp == NULL){
+        printf("Could not open file %s",azure_conf_file_name);
+        return FAILURE;
+    }
+
+
+    while (fgets(str, 256, fp) != NULL)
+    {
+      strcpy(connectionString,str);
+      connectionString = strtok(connectionString, "\"");
+      printf("\n Azure connection string : %s \n", connectionString);
+      fclose(fp);
+      return 0;
+    }
+
+    fclose(fp);
+    return FAILURE;
+}
+
 int32_t azure_iot_sdk_init()
 {
     IOTHUB_CLIENT_TRANSPORT_PROVIDER protocol;
@@ -355,6 +428,12 @@ int32_t azure_iot_sdk_init()
 #ifdef SAMPLE_AMQP
     protocol = AMQP_Protocol;
 #endif // SAMPLE_AMQP
+
+    if(read_azure_connection_string() != 0)
+    {
+      printf("\n %s: ERROR: getting Azure connection string fialed \n",__FUNCTION__);
+      return FAILURE; 
+    }
 
     // Used to initialize IoTHub SDK subsystem
     (void)IoTHub_Init();
@@ -414,7 +493,7 @@ int32_t iot_sdk_publish(char *buffer)
     // Add custom properties to message
     (void)IoTHubMessage_SetProperty(message_handle, "property_key", "property_value");
 
-    (void)printf("Sending message to IoTHub\r\n");
+    //(void)printf("Sending message to IoTHub\r\n");
     IoTHubDeviceClient_LL_SendEventAsync(device_ll_handle, message_handle, send_confirm_callback, NULL);
 
     // The message is copied to the sdk so the we can destroy it
@@ -429,11 +508,71 @@ int32_t iot_sdk_publish(char *buffer)
 /**************************************************************************
  *  calypso data processing
  *************************************************************************/
-
 #define BUFLEN 512  //Max length of buffer
 #define PORT 12345 //The port on which to listen for incoming data
 int32_t sock;
 char datetime[32];
+
+const char* csv_file_name = "/home/root/datalogger_can_data.csv";
+#define MAX_CAN_DATA_TYPES 128
+
+typedef struct csv_data_format_s {
+   int16_t msg_id;
+   int64_t msg_value;
+   char msg_category[32];
+   char msg_string[64];
+}csv_data_format_t;
+
+csv_data_format_t csv_data[MAX_CAN_DATA_TYPES];
+int can_data_cnt = 0;
+
+int read_csv_file()
+{
+    FILE *fp;
+    char buf[1024];
+    char *tmp;
+    int count = 0, ii = 0;
+
+    fp = fopen(csv_file_name, "r");
+    if (fp == NULL) {
+        fprintf(stderr, "Error CSV reading file\n");
+        return FAILURE;
+    }
+
+    while (fgets(buf, 255, fp) != NULL)
+    {
+        if ((strlen(buf)>0) && (buf[strlen (buf) - 1] == '\n'))
+            buf[strlen (buf) - 1] = '\0';
+
+        if(count == 0)
+        {
+          count++;
+          continue;
+        }
+
+        tmp = strtok(buf, ",");
+        sscanf(tmp, "%x", &csv_data[ii].msg_id);
+
+        tmp = strtok(NULL, ",");
+        sscanf(tmp, "%llx", &csv_data[ii].msg_value);
+
+        tmp = strtok(NULL, ",");
+        strcpy(&csv_data[ii].msg_category,tmp);
+
+        tmp = strtok(NULL, ",");
+        strcpy(&csv_data[ii].msg_string,tmp);
+
+        //printf(" %x, %llx, %s, %s \n",csv_data[ii].msg_id,csv_data[ii].msg_value,csv_data[ii].msg_category,csv_data[ii].msg_string);
+
+        ii++;
+    }
+
+    can_data_cnt = ii;
+    fclose(fp);
+
+    printf("\n Number of CAN data types : %d \n",can_data_cnt);
+    return 0;
+}
 
 int32_t get_date_time()
 {
@@ -487,179 +626,51 @@ int32_t create_udp_socket_and_listen()
 
 void prepare_message_and_log(uint16_t msgid, uint64_t value)
 {
-     char buffer[512];
-     uint32_t buflen = 512;
-     char *deviceid = "Auto_Gateway1";
-     char str[32];
+    char buffer[512];
+    uint32_t buflen = 512;
+    char *deviceid = "Auto_Gateway1";
+    char string[64];
+    char category[64];
+    int ii;
+    int found = 0;
 
-     memset(buffer,0,512);
-     jwOpen( buffer, buflen, JW_OBJECT, JW_PRETTY );
-#if 0
-     switch(msgid)
-     {
-        case DRV_SEAT_MOVEMENT_ID:
-           strcpy(str,"DRV SEAT MOVEMENT");
-           jwObj_string( "deviceParameter", "DRV SEAT MOVEMENT" );
-           jwObj_int( "deviceValue", value);
-           break;
-        case MOVE_ONLY_REAR_SUN_COVER_ID:
-           strcpy(str,"MOVE ONLY REAR SUN COVER");
-           jwObj_string( "deviceParameter", "MOVE ONLY REAR SUN COVER" );
-           jwObj_int( "deviceValue", value);
-           break;
-        case ENGINE_ON_ID:
-           strcpy(str,"ENGINE ON");
-           jwObj_string( "deviceParameter", "ENGINE ON" );
-           jwObj_int( "deviceValue", value);
-           break;
-        case ENGINE_OFF_ID:
-           strcpy(str,"ENGINE OFF");
-           jwObj_string( "deviceParameter", "ENGINE OFF" );
-           jwObj_long( "deviceValue", value);
-           break;
-        case STEERING_WHEEL_TURN_ID:
-           strcpy(str,"STEERING WHEEL TURN");
-           jwObj_string( "deviceParameter", "STEERING WHEEL TURN" );
-           jwObj_long( "deviceValue", value);
-           break;
-        case WHEEL_MOVEMENT_ID:
-           if(value == 0xF2FF)
-           {
-              strcpy(str,"FRONT WHEEL MOVEMENT");
-              jwObj_string( "deviceParameter", "FRONT WHEEL MOVEMENT" );
-           }
-           else if(value == 0xF1FF)
-           {
-              strcpy(str,"REAR WHEEL MOVEMENT");
-              jwObj_string( "deviceParameter", "REAR WHEEL MOVEMENT" );
-           }
-           else
-           {
-              strcpy(str,"WHEEL MOVEMENT");
-              jwObj_string( "deviceParameter", "WHEEL MOVEMENT" );
-           }
-           jwObj_int( "deviceValue", value);
-           break;
-        case GPS_ID:
-           strcpy(str,"GPS");
-           jwObj_string( "deviceParameter", "GPS" );
-           jwObj_long( "deviceValue", value);
-           break;
-        case LIGHT_AND_BRAKE_ID:
-           if(value == 0x0030FC)
-           {
-             strcpy(str,"LIGHT OFF NO BRAKE");
-             jwObj_string( "deviceParameter", "LIGHT OFF NO BRAKE" );
-           }
-           else if(value == 0x2532FC)
-           {
-             strcpy(str,"FOG LAMP FRONT PRESS");
-             jwObj_string( "deviceParameter", "FOG LAMP FRONT PRESS" );
-           }
-           else if(value == 0x0432FC)
-           {
-             strcpy(str,"PARKING LIGHT NO BRAKE");
-             jwObj_string( "deviceParameter", "PARKING LIGHT NO BRAKE" );
-           }
-           else
-           {
-              strcpy(str,"LIGHT AND BRAKE");
-              jwObj_string( "deviceParameter", "LIGHT AND BRAKE" );
-           }
-           jwObj_int( "deviceValue", value);
-           break;
-        case AIR_FLOW_FREE_FROM_OUTSIDE_ID:
-           strcpy(str,"AIR FLOW FREE FROM OUTSIDE");
-           jwObj_string( "deviceParameter", "AIR FLOW FREE FROM OUTSIDE" );
-           jwObj_int( "deviceValue", value);
-           break;
-        case WINDOW_ID:
-           if(value == 0x00F0)
-           {
-              strcpy(str,"WINDOW CLOSE");
-              jwObj_string( "deviceParameter", "WINDOW CLOSE" );
-           }
-           else if(value == 0x5BF2)
-           {
-              strcpy(str,"WINDOW OPEN");
-              jwObj_string( "deviceParameter", "WINDOW OPEN" );
-           }
-           else
-           {
-              strcpy(str,"WINDOW");
-              jwObj_string( "deviceParameter", "WINDOW" );
-           }
-           jwObj_int( "deviceValue", value);
-           break;
-        case AC_ON_ID:
-           strcpy(str,"AC ON");
-           jwObj_string( "deviceParameter", "AC ON" );
-           jwObj_int( "deviceValue", value);
-           break;
-        case HAZARD_WARNING_SIGNAL_ID:
-           if(value == 0x80F0)
-           {
-              strcpy(str,"HAZARD WARNING SIGNAL OFF");
-              jwObj_string( "deviceParameter", "HAZARD WARNING SIGNAL OFF" );
-           }
-           else if(value == 0xB1F2)
-           {
-              strcpy(str,"HAZARD WARNING SIGNAL PRESS");
-              jwObj_string( "deviceParameter", "HAZARD WARNING SIGNAL PRESS" );
-           } 
-           else
-           {
-              strcpy(str,"HAZARD WARNING SIGNAL");
-              jwObj_string( "deviceParameter", "HAZARD WARNING SIGNAL" );
-           }
-           jwObj_int( "deviceValue", value);
-           break;
-        case MENU_INTERACTION_HELP_ID:
-           strcpy(str,"MENU INTERACTION HELP");
-           jwObj_string( "deviceParameter", "MENU INTERACTION HELP" );
-           jwObj_long( "deviceValue", value);
-           break;
-        case WIPERS_ID:
-           if(value == 0xC1FF)
-           {
-              strcpy(str,"WIPERS ON WAY UP"); 
-              jwObj_string( "deviceParameter", "WIPERS ON WAY UP" );
-           }
-           else if(value == 0xC2FF)
-           {
-              strcpy(str,"WIPERS ON WAY DOWN");
-              jwObj_string( "deviceParameter", "WIPERS ON WAY DOWN" );
-           }
-           else
-           {
-              strcpy(str,"WIPERS ON WAY");
-              jwObj_string( "deviceParameter", "WIPERS ON WAY" );
-           }
-           jwObj_int( "deviceValue", value);
-           break;
-        case BREAK_PRESS_ID:
-           strcpy(str,"BREAK PRESS");
-           jwObj_string( "deviceParameter", "BREAK PRESS" );
-           jwObj_int( "deviceValue", value);
-           break;
-        default:
-           printf("\n ERROR: not a valid MSGID \n");          
-           break;
-     }
-#endif
+    for(ii = 0;ii < can_data_cnt;ii++)
+    {
+       if((msgid == csv_data[ii].msg_id) && (value == csv_data[ii].msg_value))
+       {
+          strcpy(&category,&csv_data[ii].msg_category);
+          strcpy(&string,&csv_data[ii].msg_string);
+	  found = 1;
+	  break;
+       }
+    }
 
+    if(found == 0)
+    {
+	printf("\n Message id %x, value %llx not found in CSV file. \n",msgid,value);
+ 	return;
+    }
+
+    memset(buffer,0,512);
+    jwOpen( buffer, buflen, JW_OBJECT, JW_PRETTY );
+#ifdef AWS_CLOUD
     jwObj_string( "deviceId", deviceid);
     jwObj_int( "messageId", msgid);
     jwObj_long( "value", value);
     jwObj_string( "dateTime", datetime);
+#elif AZURE_CLOUD
+    jwObj_string( "deviceId", deviceid);
+    jwObj_string( "dateTime", datetime);
+    jwObj_int( "msgId", msgid);
+    jwObj_long( "msgValue", value);
+    jwObj_string( "msgCategory",category);
+    jwObj_string( "msgString",string);
+#endif
     jwClose();
-    //sprintf(buffer,"%llu,%s,%s,%s",value,str,deviceid,datetime);
-    //printf(" %s \n",buffer );         
 
-    //if(1)
     if(iot_sdk_publish(buffer) == 0)
     {
-       printf(" Device Id:%s , Message Id:%x , Value:%lx \n",deviceid,msgid,value);         
+       printf(" Device Id:%s , Message Id:%x , Value:%lx, String:%s \n",deviceid,msgid,value,string);         
     }
     else
     {
@@ -736,13 +747,18 @@ int32_t main(int32_t argc, char *argv[])
         {
            return FAILURE; 
         }
-#endif
-#ifdef AZURE_CLOUD
+#elif AZURE_CLOUD
         if(azure_iot_sdk_init() == FAILURE)
         {
            return FAILURE;
         }
 #endif
+
+        if(read_csv_file() != 0)
+        {
+           return FAILURE; 
+        }
+
         if(sqlite3_create_table() != 0)
         {
            return FAILURE; 
@@ -762,6 +778,7 @@ int32_t main(int32_t argc, char *argv[])
            }
          
            process_buffer(buf,recv_len);
+	   sleep(1);
         }
 
 	printf("\nSuccessfully executed sample.\n");
